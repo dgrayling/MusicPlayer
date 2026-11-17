@@ -8,11 +8,13 @@ import com.example.musicplayer.data.PlaybackStateStore
 import com.example.musicplayer.data.PlaylistRepository
 import com.example.musicplayer.data.SettingsStore
 import com.example.musicplayer.data.db.AppDatabase
+import com.example.musicplayer.data.dedupe.DuplicateFolderFinder
 import com.example.musicplayer.data.enrich.CachedHttp
 import com.example.musicplayer.data.enrich.EnrichmentRepository
 import com.example.musicplayer.data.enrich.EnrichmentScheduler
 import com.example.musicplayer.data.enrich.ItunesClient
 import com.example.musicplayer.data.enrich.MusicBrainzClient
+import com.example.musicplayer.data.trim.TrimRepository
 import com.example.musicplayer.playback.PlayerConnection
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -60,7 +62,9 @@ class AppContainer(private val context: Context) {
 
     val mediaRepository = MediaStoreRepository(context, appScope, enrichment.overrides)
     val playlistRepository = PlaylistRepository(database.playlistDao())
+    val duplicateFolderFinder = DuplicateFolderFinder(context)
     val playbackStateStore = PlaybackStateStore(context)
+    val trimRepository = TrimRepository(context, database.trimDao(), settings)
     val playerConnection = PlayerConnection(context)
 
     /**

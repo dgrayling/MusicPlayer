@@ -32,9 +32,17 @@ class SettingsStore(private val context: Context) {
         context.settingsDataStore.edit { it[ENRICH_WIFI_ONLY] = wifiOnly }
     }
 
+    /** Start songs where sound begins and move on where it ends, skipping leading and trailing silence. */
+    val skipSilence: Flow<Boolean> = context.settingsDataStore.data.map { it[SKIP_SILENCE] ?: true }
+
+    suspend fun setSkipSilence(skip: Boolean) {
+        context.settingsDataStore.edit { it[SKIP_SILENCE] = skip }
+    }
+
     private companion object {
         val SHOW_ALBUMS = booleanPreferencesKey("show_albums_tab")
         val ENRICH_ENABLED = booleanPreferencesKey("enrich_enabled")
         val ENRICH_WIFI_ONLY = booleanPreferencesKey("enrich_wifi_only")
+        val SKIP_SILENCE = booleanPreferencesKey("skip_silence")
     }
 }

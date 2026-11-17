@@ -13,14 +13,26 @@ import com.example.musicplayer.data.db.SongSuggestionEntity
 import com.example.musicplayer.data.enrich.EnrichmentRunStats
 import com.example.musicplayer.data.model.Playlist
 import com.example.musicplayer.data.model.Song
+import com.example.musicplayer.data.trim.TrimMarks
 import com.example.musicplayer.ui.components.pluralize
+import com.example.musicplayer.data.dedupe.DuplicateFolderFinder
+import com.example.musicplayer.data.dedupe.FolderRemoval
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+
+sealed interface DuplicateScan {
+    data object Idle : DuplicateScan
+    data class Scanning(val done: Int, val total: Int) : DuplicateScan
+    data class Done(val removals: List<FolderRemoval>, val ignoreNames: Boolean) : DuplicateScan
+}
 
 /** Single app-wide view model: the library is small enough that per-screen view models add nothing. */
 class AppViewModel(container: AppContainer) : ViewModel() {
@@ -63,6 +75,61 @@ class AppViewModel(container: AppContainer) : ViewModel() {
     }
 
     fun refreshLibrary() = library.refresh()
+
+    // --- duplicate folders ---
+    private val duplicateFinder = container.duplicateFolderFinder
+    private val _duplicateScan = MutableStateFlow<DuplicateScan>(DuplicateScan.Idle)
+    val duplicateScan: StateFlow<DuplicateScan> = _duplicateScan.asStateFlow()
+    private var duplicateJob: Job? = null
+
+    fun scanDuplicateFolders(ignoreNames: Boolean) {
+        duplicateJob?.cancel()
+        duplicateJob = viewModelScope.launch {
+            _duplicateScan.value = DuplicateScan.Scanning(0, 0)
+            val songs = library.awaitRawSongs()
+            val found = duplicateFinder.find(songs, ignoreNames) { done, total ->
+                _duplicateScan.value = DuplicateScan.Scanning(done, total)
+            }
+            _duplicateScan.value = DuplicateScan.Done(found, ignoreNames)
+        }
+    }
+
+    fun cancelDuplicateScan() {
+        duplicateJob?.cancel()
+        _duplicateScan.value = DuplicateScan.Idle
+    }
+
+    /**
+     * Re-checks the chosen removals against the library as it is now. Returns the songs to trash for the ones
+     * that still hold, or null (with a message) when none do.
+     */
+    fun prepareFolderRemoval(chosen: List<FolderRemoval>, onMessage: (String) -> Unit): List<FolderRemoval>? {
+        val current = library.rawSongs.value.orEmpty()
+        val valid = chosen.filter { DuplicateFolderFinder.stillValid(it, current) }
+        if (valid.size < chosen.size) {
+            onMessage("${pluralize(chosen.size - valid.size, "folder")} changed since the scan and will be skipped")
+        }
+        return valid.takeIf { it.isNotEmpty() }
+    }
+
+    fun songUris(ids: List<Long>): List<android.net.Uri> {
+        val byId = library.rawSongs.value.orEmpty().associateBy { it.id }
+        return ids.mapNotNull { byId[it]?.uri }
+    }
+
+    /** Called after Android has moved the folders' songs to the trash. */
+    fun onFoldersTrashed(removed: List<FolderRemoval>, onMessage: (String) -> Unit) {
+        viewModelScope.launch {
+            playlistRepo.replaceSongs(removed.fold(emptyMap()) { acc, r -> acc + r.replacements })
+            library.refresh()
+            val songs = removed.sumOf { it.songIds.size }
+            onMessage("Moved ${pluralize(removed.size, "folder")} (${pluralize(songs, "song")}) to the trash")
+            (_duplicateScan.value as? DuplicateScan.Done)?.let { done ->
+                val gone = removed.map { it.folder }.toSet()
+                _duplicateScan.value = done.copy(removals = done.removals.filter { it.folder !in gone })
+            }
+        }
+    }
 
     // --- metadata enrichment ---
     private val enrichment = container.enrichment
@@ -168,6 +235,31 @@ class AppViewModel(container: AppContainer) : ViewModel() {
 
     fun removeFromPlaylist(id: Long, song: Song) {
         viewModelScope.launch { playlistRepo.removeSong(id, song.id) }
+    }
+
+    // ---- Track start/end marks ----
+
+    private val trims = container.trimRepository
+
+    val skipSilence: StateFlow<Boolean> = settings.skipSilence.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    fun setSkipSilence(skip: Boolean) {
+        viewModelScope.launch { settings.setSkipSilence(skip) }
+    }
+
+    fun trimMarks(songId: Long): Flow<TrimMarks> = trims.observe(songId)
+
+    /** Null marks fall back to detected silence (or the song's own start/end). */
+    fun setTrim(songId: Long, startMs: Long?, endMs: Long?) {
+        viewModelScope.launch { trims.setMarks(songId, startMs, endMs) }
+    }
+
+    fun setTrimStart(songId: Long, startMs: Long?) {
+        viewModelScope.launch { trims.setStart(songId, startMs) }
+    }
+
+    fun setTrimEnd(songId: Long, endMs: Long?) {
+        viewModelScope.launch { trims.setEnd(songId, endMs) }
     }
 
     companion object {

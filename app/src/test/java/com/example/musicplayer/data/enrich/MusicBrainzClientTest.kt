@@ -154,4 +154,18 @@ class DatabaseMigrationTest {
             db.query("SELECT COUNT(*) FROM song_override").use { c -> assertTrue(c.moveToFirst()) }
         }
     }
+
+    @Test
+    fun migrate2To3AddsTrackTrims() {
+        helper.createDatabase("migration-test-3", 2).use { db ->
+            db.execSQL("INSERT INTO playlists (id, name, createdAt) VALUES (1, 'Mix', 0)")
+        }
+        helper.runMigrationsAndValidate("migration-test-3", 3, true).use { db ->
+            db.query("SELECT COUNT(*) FROM playlists").use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals(1, c.getInt(0))
+            }
+            db.execSQL("INSERT INTO track_trim (songId, startMs, analyzedFingerprint) VALUES (5, 1200, '')")
+        }
+    }
 }

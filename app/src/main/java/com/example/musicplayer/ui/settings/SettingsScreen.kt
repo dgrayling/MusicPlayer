@@ -7,6 +7,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.ContentCut
+import androidx.compose.material.icons.filled.FolderCopy
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -26,8 +28,14 @@ import com.example.musicplayer.ui.AppViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(vm: AppViewModel, onBack: () -> Unit, onReviewSuggestions: () -> Unit) {
+fun SettingsScreen(
+    vm: AppViewModel,
+    onBack: () -> Unit,
+    onReviewSuggestions: () -> Unit,
+    onDuplicateFolders: () -> Unit,
+) {
     val showAlbums by vm.showAlbumsTab.collectAsStateWithLifecycle()
+    val skipSilence by vm.skipSilence.collectAsStateWithLifecycle()
     var confirmReset by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -49,6 +57,25 @@ fun SettingsScreen(vm: AppViewModel, onBack: () -> Unit, onReviewSuggestions: ()
                     leadingContent = { Icon(Icons.Filled.Album, contentDescription = null) },
                     trailingContent = { Switch(checked = showAlbums, onCheckedChange = vm::setShowAlbumsTab) },
                     modifier = Modifier.clickable { vm.setShowAlbumsTab(!showAlbums) },
+                )
+            }
+            item {
+                ListItem(
+                    headlineContent = { Text("Skip silence") },
+                    supportingContent = {
+                        Text("Start songs where the sound begins and move on when it ends. Start and end marks you set always win")
+                    },
+                    leadingContent = { Icon(Icons.Filled.ContentCut, contentDescription = null) },
+                    trailingContent = { Switch(checked = skipSilence, onCheckedChange = vm::setSkipSilence) },
+                    modifier = Modifier.clickable { vm.setSkipSilence(!skipSilence) },
+                )
+            }
+            item {
+                ListItem(
+                    headlineContent = { Text("Duplicate folders") },
+                    supportingContent = { Text("Find folders that are copies of, or contained in, another folder and merge them") },
+                    leadingContent = { Icon(Icons.Filled.FolderCopy, contentDescription = null) },
+                    modifier = Modifier.clickable(onClick = onDuplicateFolders),
                 )
             }
             metadataSettings(vm, onReview = onReviewSuggestions, onReset = { confirmReset = true })

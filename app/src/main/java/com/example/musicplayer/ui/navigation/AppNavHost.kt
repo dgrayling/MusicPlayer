@@ -38,6 +38,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.musicplayer.data.model.Song
+import com.example.musicplayer.data.trim.TrimMarks
 import com.example.musicplayer.ui.AppViewModel
 import com.example.musicplayer.ui.components.AddToPlaylistDialog
 import com.example.musicplayer.ui.components.LocalOpenSettings
@@ -55,7 +56,9 @@ import com.example.musicplayer.ui.library.PlaylistsScreen
 import com.example.musicplayer.ui.library.SongsScreen
 import com.example.musicplayer.ui.player.MiniPlayer
 import com.example.musicplayer.ui.player.NowPlayingScreen
+import com.example.musicplayer.ui.player.TrimActions
 import com.example.musicplayer.ui.search.SearchScreen
+import com.example.musicplayer.ui.settings.DuplicateFoldersScreen
 import com.example.musicplayer.ui.settings.MetadataReviewScreen
 import com.example.musicplayer.ui.settings.SettingsScreen
 import com.example.musicplayer.ui.settings.SongInfoDialog
@@ -75,6 +78,7 @@ private object Routes {
     const val NOW_PLAYING = "now_playing"
     const val SETTINGS = "settings"
     const val METADATA_REVIEW = "metadata_review"
+    const val DUPLICATE_FOLDERS = "duplicate_folders"
 
     fun album(id: Long) = "album/$id"
     fun artist(id: Long) = "artist/$id"
@@ -177,7 +181,15 @@ fun MusicAppRoot(vm: AppViewModel) {
                 composable(Routes.PLAYLIST, arguments = listOf(navArgument("id") { type = NavType.LongType })) {
                     PlaylistDetailScreen(vm, it.arguments!!.getLong("id"), back)
                 }
-                composable(Routes.SETTINGS) { SettingsScreen(vm, back) { nav.navigate(Routes.METADATA_REVIEW) } }
+                composable(Routes.SETTINGS) {
+                    SettingsScreen(
+                        vm,
+                        back,
+                        onReviewSuggestions = { nav.navigate(Routes.METADATA_REVIEW) },
+                        onDuplicateFolders = { nav.navigate(Routes.DUPLICATE_FOLDERS) },
+                    )
+                }
+                composable(Routes.DUPLICATE_FOLDERS) { DuplicateFoldersScreen(vm, back) }
                 composable(Routes.METADATA_REVIEW) { MetadataReviewScreen(vm, back) }
                 composable(Routes.SEARCH) { SearchScreen(vm, back, toAlbum, toArtist) }
                 composable(
@@ -186,7 +198,16 @@ fun MusicAppRoot(vm: AppViewModel) {
                     exitTransition = { slideOutVertically { it } },
                     popExitTransition = { slideOutVertically { it } },
                 ) {
-                    NowPlayingScreen(vm.player, playerState, onClose = back)
+                    val songId = playerState.currentSongId
+                    val trim by remember(songId) { vm.trimMarks(songId) }.collectAsStateWithLifecycle(TrimMarks())
+                    val trimActions = remember(songId) {
+                        TrimActions(
+                            setMarks = { start, end -> vm.setTrim(songId, start, end) },
+                            setStart = { vm.setTrimStart(songId, it) },
+                            setEnd = { vm.setTrimEnd(songId, it) },
+                        )
+                    }
+                    NowPlayingScreen(vm.player, playerState, trim, trimActions, onClose = back)
                 }
             }
         }

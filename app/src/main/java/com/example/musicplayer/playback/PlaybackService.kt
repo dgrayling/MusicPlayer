@@ -14,6 +14,7 @@ import androidx.media3.session.MediaSessionService
 import com.example.musicplayer.MainActivity
 import com.example.musicplayer.MusicApp
 import com.example.musicplayer.data.SavedPlaybackState
+import com.example.musicplayer.data.model.Song
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.MainScope
@@ -52,6 +53,7 @@ class PlaybackService : MediaSessionService() {
         // Repeat the current song forever unless the user changes the repeat mode.
         player.repeatMode = Player.REPEAT_MODE_ONE
         player.addListener(playerListener)
+        TrimEnforcer(player, scope, container.trimRepository, ::findSong).start()
 
         val openApp = PendingIntent.getActivity(
             this,
@@ -116,6 +118,10 @@ class PlaybackService : MediaSessionService() {
             }
         }
     }
+
+    private suspend fun findSong(id: Long): Song? =
+        container.mediaRepository.rawSongs.value?.firstOrNull { it.id == id }
+            ?: container.mediaRepository.songsByIds(listOf(id)).firstOrNull()
 
     private fun saveState() {
         if (!restoreAttempted) return

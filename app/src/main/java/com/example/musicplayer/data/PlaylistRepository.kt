@@ -29,4 +29,7 @@ class PlaylistRepository(private val dao: PlaylistDao) {
     suspend fun addSongs(id: Long, songIds: List<Long>) = dao.addSongs(id, songIds)
 
     suspend fun removeSong(id: Long, songId: Long) = dao.removeSong(id, songId)
+
+    /** Swaps songs in every playlist (e.g. a removed duplicate for the copy that was kept), keeping positions. */
+    suspend fun replaceSongs(replacements: Map<Long, Long>) = dao.replaceSongs(replacements)
 }

@@ -84,6 +84,21 @@ abstract class PlaylistDao {
     @Query("DELETE FROM playlist_songs WHERE playlistId = :playlistId AND songId = :songId")
     abstract suspend fun removeSong(playlistId: Long, songId: Long)
 
+    @Query("UPDATE OR IGNORE playlist_songs SET songId = :to WHERE songId = :from")
+    abstract suspend fun repointSong(from: Long, to: Long)
+
+    @Query("DELETE FROM playlist_songs WHERE songId = :songId")
+    abstract suspend fun removeSongEverywhere(songId: Long)
+
+    /** Points every playlist entry for a key song at its value song; drops entries that would then repeat. */
+    @Transaction
+    open suspend fun replaceSongs(replacements: Map<Long, Long>) {
+        for ((from, to) in replacements) {
+            repointSong(from, to)
+            removeSongEverywhere(from) // left only where the playlist already had `to`
+        }
+    }
+
     /** Appends songs to the end of the playlist, skipping any already in it. */
     @Transaction
     open suspend fun addSongs(playlistId: Long, songIds: List<Long>) {
@@ -103,14 +118,16 @@ abstract class PlaylistDao {
         ReleaseCacheEntity::class,
         RecordingCacheEntity::class,
         HttpCacheEntity::class,
+        TrackTrimEntity::class,
     ],
-    version = 2,
-    // v2 only adds the metadata-enrichment tables, so Room can generate the migration.
-    autoMigrations = [AutoMigration(from = 1, to = 2)],
+    version = 3,
+    // v2 adds the metadata-enrichment tables and v3 the track start/end marks, so Room can generate both migrations.
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)],
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun playlistDao(): PlaylistDao
     abstract fun enrichmentDao(): EnrichmentDao
+    abstract fun trimDao(): TrimDao
 
     companion object {
         fun build(context: Context): AppDatabase =

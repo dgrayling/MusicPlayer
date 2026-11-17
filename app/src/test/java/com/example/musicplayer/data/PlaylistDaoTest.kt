@@ -38,6 +38,15 @@ class PlaylistDaoTest {
     }
 
     @Test
+    fun replacingSongsKeepsPositionsAndDropsRepeats() = runTest {
+        val a = repo.create("A", listOf(1L, 2L, 3L))
+        val b = repo.create("B", listOf(2L, 5L)) // already has 5, the replacement for 2
+        repo.replaceSongs(mapOf(2L to 5L))
+        assertEquals(listOf(1L, 5L, 3L), repo.songIds(a).first())
+        assertEquals(listOf(5L), repo.songIds(b).first())
+    }
+
+    @Test
     fun removeRenameAndDelete() = runTest {
         val id = repo.create("Old name", listOf(1L, 2L))
         repo.removeSong(id, 1L)
