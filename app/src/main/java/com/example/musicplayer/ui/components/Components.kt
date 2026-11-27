@@ -66,6 +66,8 @@ class SongActions(
     val showMessage: (String) -> Unit,
     /** Opens the song's metadata (original vs corrected) for review or editing. */
     val showInfo: (Song) -> Unit = {},
+    /** Opens the Now Playing screen. */
+    val openNowPlaying: () -> Unit = {},
 )
 
 val LocalSongActions = staticCompositionLocalOf<SongActions> { error("SongActions not provided") }
@@ -139,7 +141,11 @@ fun SongRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .combinedClickable(
+                // Tapping the track that's already loaded opens the player instead of restarting it.
+                onClick = if (isCurrent && selected == null) actions.openNowPlaying else onClick,
+                onLongClick = onLongClick,
+            )
             .then(if (selected == true) Modifier.background(MaterialTheme.colorScheme.secondaryContainer) else Modifier)
             .padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,

@@ -133,6 +133,7 @@ fun MusicAppRoot(vm: AppViewModel) {
             goToArtist = { song -> nav.navigate(Routes.artist(song.artistId)) },
             showMessage = ::toast,
             showInfo = { song -> infoSong = song },
+            openNowPlaying = { nav.navigate(Routes.NOW_PLAYING) { launchSingleTop = true } },
         )
     }
 
